@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 2.8.4)
+project(Ngram)
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -Wall -g -ggdb -std=c99")
+add_executable(demo test_vocab.c murmur_hash.c hash_vocab.c)
+add_executable(ngram_demo test_ngram.c murmur_hash.c hash_vocab.c ngram.c)
