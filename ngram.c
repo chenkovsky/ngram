@@ -1,8 +1,8 @@
 ﻿#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 #include "ngram.h"
-#define MAX_ORDER 64
 typedef struct {
     uint32_t word;
     uint32_t next_arr_idx;
@@ -32,7 +32,7 @@ struct Ngram_T{
 
 
 
-uint32_t Ngram_id(const Ngram model, char* word){
+uint32_t Ngram_id(const Ngram model, const char* word){
     return HashVocab_id(model->vocab, word);
 }
 
@@ -51,8 +51,8 @@ Ngram Ngram_init_from_bin(const char* mem){//assume ending is same
     mem += sizeof(size_t)*model->ngram_order;
 
     size_t vocab_mem_size;
-    READ(vocab_mem_size, uint32_t, mem);
-
+    READ(vocab_mem_size, size_t, mem);
+    //printf("vocab_mem_size:%zu\n", vocab_mem_size);
     model->vocab = HashVocab_init_from_bin(mem);
     mem += vocab_mem_size;
 
@@ -194,35 +194,40 @@ uint32_t Ngram_prob(const Ngram model, const uint32_t* gram_words, uint32_t gram
     uint32_t cur_word_id = gram_words[0];
     uint32_t next_word_start = model->uni_gram[cur_word_id].next_arr_idx;
     uint32_t next_word_end = model->uni_gram[cur_word_id+1].next_arr_idx;
+    //printf("order:%d, cur_word_id:%d,next_word_start:%d, next_word_end:%d\n",gram_len, cur_word_id, next_word_start, next_word_end);
     if (gram_len == 1) {
         return model->uni_gram[cur_word_id].prob;
     }
     if (gram_len > model->ngram_order) {
         return -1;
     }
-    uint32_t next = -1; 
+    uint32_t next = -1;
     uint32_t ngram_idx = 0;
     for (uint32_t j = 1; j < gram_len;j++) {
         if (j == gram_len -1) {
             if (j + 1 == model->ngram_order) {
-                next = search_high_gram(gram_words[j], model->high_gram + next_word_start, next_word_end - next_word_start);
+                next = search_high_gram(gram_words[j], model->high_gram + next_word_start, next_word_end - next_word_start)+next_word_start;
+                //printf("next:%d, prob:%d\n", next, model->high_gram[next].prob);
                 return model->high_gram[next].prob;
             }else{
-                next = search_low_gram(gram_words[j], model->low_grams[ngram_idx] + next_word_start, next_word_end - next_word_start); 
+                next = search_low_gram(gram_words[j], model->low_grams[ngram_idx] + next_word_start, next_word_end - next_word_start)+next_word_start; 
+                //printf("next:%d, prob:%d\n", next, model->low_grams[ngram_idx][next].prob);
                 return model->low_grams[ngram_idx][next].prob;
             }
         }else{
-            next = search_low_gram(gram_words[j], model->low_grams[ngram_idx] + next_word_start, next_word_end - next_word_start); 
+            next = search_low_gram(gram_words[j], model->low_grams[ngram_idx] + next_word_start, next_word_end - next_word_start)+next_word_start; 
         }
-        
-        ngram_idx+=1;
         if (next == -1) {
+            //printf("cannot find.\n");
             return -1;
         }else{
             next_word_start = model->low_grams[ngram_idx][next].next_arr_idx;
             next_word_end = model->low_grams[ngram_idx][next+1].next_arr_idx;
         }
+        ngram_idx+=1;
+        //printf("next:%d, next_word_start:%d, next_word_end:%d\n", next,next_word_start,next_word_end);
     }
+    //printf("cannot find.\n");
     return -1;
 }
 
@@ -234,24 +239,57 @@ uint32_t Ngram_bow(const Ngram model, const uint32_t* gram_words, uint32_t gram_
         return model->uni_gram[cur_word_id].bow;
     }
     if (gram_len >= model->ngram_order) {
-        return -1;
+        return 0;
     }
     uint32_t next = -1;
     uint32_t ngram_idx = 0;
     for (uint32_t j = 1; j < gram_len;j++) {
-        next = search_low_gram(gram_words[j], model->low_grams[ngram_idx] + next_word_start, next_word_end - next_word_start); 
+        next = search_low_gram(gram_words[j], model->low_grams[ngram_idx] + next_word_start, next_word_end - next_word_start)+next_word_start; 
         if(j == gram_len -1){
            return model->low_grams[ngram_idx][next].bow;
         }
-        ngram_idx+=1;
         if (next == -1) {
             return -1;
         }else{
             next_word_start = model->low_grams[ngram_idx][next].next_arr_idx;
             next_word_end = model->low_grams[ngram_idx][next+1].next_arr_idx;
         }
+        ngram_idx+=1;
     }
     return model->low_grams[ngram_idx][next].bow;
+}
+
+uint32_t Ngram_order(const Ngram model){
+    return model->ngram_order;
+}
+
+size_t Ngram_gram_num(const Ngram model, uint32_t order){
+    if (order > model->ngram_order) {
+        return 0;
+    }
+    return model->ngram_counts[order-1];
+}
+
+uint32_t Ngram_word_num(const Ngram model){
+    return HashVocab_word_num(model->vocab);
+}
+
+
+uint32_t Ngram_prob2(const Ngram model, const char** gram_words, uint32_t gram_len){
+    assert(gram_len < MAX_ORDER);
+    uint32_t wids[MAX_ORDER];
+    for (uint32_t i = 0;i<gram_len;i++) {
+        wids[i] = Ngram_id(model,gram_words[i]);
+    }
+    return Ngram_prob(model, wids, gram_len);
+}
+uint32_t Ngram_bow2(const Ngram model, const char** gram_words, uint32_t gram_len){
+    assert(gram_len < MAX_ORDER);
+    uint32_t wids[MAX_ORDER];
+    for (uint32_t i = 0;i<gram_len;i++) {
+        wids[i] = Ngram_id(model,gram_words[i]);
+    }
+    return Ngram_bow(model, wids, gram_len);
 }
 
 struct NgramBuilder_T{
@@ -291,8 +329,18 @@ NgramBuilder NgramBuilder_init(const size_t* gram_nums, uint32_t order){
     return builder;
 }
 
+int debug = 0;
+
+void print_binary(char* arr, uint32_t len){
+    for (uint32_t i = 0;i<len;i++) {
+        printf("%x ", (unsigned char)arr[i]);
+    }
+    printf("\n");
+}
+
+
 #define max(a,b) ((a)>(b)?(a):(b))
-char* _NgramBuilder_cp_str(NgramBuilder builder, char* encoded_ngram, size_t len){
+char* _NgramBuilder_cp_str(NgramBuilder builder, const char* encoded_ngram, size_t len){
     if(builder->used_cache_size + len >= builder->cache_size){
         builder->cache_size = max(builder->cache_size, len)*2;
         builder->ngram_cache = realloc(builder->ngram_cache, builder->cache_size);
@@ -300,10 +348,10 @@ char* _NgramBuilder_cp_str(NgramBuilder builder, char* encoded_ngram, size_t len
     //printf("new_word_strs_size:%zu\n", vocab->word_strs_used_size);
     //printf("word_strs_size:%zu\n", vocab->word_strs_size);
     uint32_t offset = builder->used_cache_size;
-    strncpy(builder->ngram_cache + offset, encoded_ngram, len);
+    memcpy(builder->ngram_cache + offset, encoded_ngram, len);
 
     builder->used_cache_size = offset + len;
-    return offset+builder->ngram_cache;
+    return offset + builder->ngram_cache; 
 }
 
 static inline size_t _encode_uni(uint32_t word_id, uint32_t prob, uint32_t bow, char* buff){
@@ -314,26 +362,26 @@ static inline size_t _encode_uni(uint32_t word_id, uint32_t prob, uint32_t bow, 
     buff[0] = header;
     size_t offset = sizeof(char);
 
-    strncpy(buff+offset,(char*)&word_id,sizeof(uint32_t));
+    memcpy(buff+offset,(char*)&word_id,sizeof(uint32_t));
     offset += sizeof(uint32_t);
 
-    strncpy(buff+offset,(char*)&prob, sizeof(uint32_t));
+    memcpy(buff+offset,(char*)&prob, sizeof(uint32_t));
     offset += sizeof(uint32_t);
 
     if (bow != 0) {
-        strncpy(buff+offset, (char*)&bow, sizeof(uint32_t));
+        memcpy(buff+offset, (char*)&bow, sizeof(uint32_t));
         offset += sizeof(uint32_t);
     }
     return offset;
 }
 
-static inline uint32_t _decode_order(char* buff){
+static inline uint32_t _decode_order(const char* buff){
     return (*buff) & ((1 << 6)-1);
 }
 
-static inline size_t _encode_gram(uint32_t *wids, uint32_t order, uint32_t prob, uint32_t bow, char* buff){
+static inline size_t _encode_gram(const uint32_t *wids, uint32_t order, uint32_t prob, uint32_t bow, char* buff){
     assert(order < (1<<6) -1);
-    char header = (1<<6)|order;//has prob; order = order
+    char header = (1<<7)|order;//has prob; order = order
     if (bow != 0) {
         header |= (1<<6);
     }
@@ -341,15 +389,15 @@ static inline size_t _encode_gram(uint32_t *wids, uint32_t order, uint32_t prob,
     size_t offset = sizeof(char);
 
     for (uint32_t i = 0; i < order;i++) {
-        strncpy(buff + offset, (char*)&wids[i], sizeof(uint32_t)); 
+        memcpy(buff + offset, (char*)&wids[i], sizeof(uint32_t)); 
         offset += sizeof(uint32_t);
     }
 
-    strncpy(buff+offset,(char*)&prob, sizeof(uint32_t));
+    memcpy(buff+offset,(char*)&prob, sizeof(uint32_t));
     offset += sizeof(uint32_t);
 
     if (bow != 0) {
-        strncpy(buff+offset, (char*)&bow, sizeof(uint32_t));
+        memcpy(buff+offset, (char*)&bow, sizeof(uint32_t));
         offset += sizeof(uint32_t);
     }
     return offset;
@@ -363,22 +411,39 @@ static inline void _decode_gram(uint32_t *wids, uint32_t* order, uint32_t* prob,
     size_t offset = sizeof(char);
 
     for (uint32_t i = 0; i < (*order);i++) {
-        strncpy((char*)&wids[i], buff+offset, sizeof(uint32_t)); 
+        memcpy((char*)&wids[i], buff+offset, sizeof(uint32_t)); 
         offset += sizeof(uint32_t);
     }
 
-    strncpy((char*)prob, buff+offset, sizeof(uint32_t));
+    memcpy((char*)prob, buff+offset, sizeof(uint32_t));
     offset += sizeof(uint32_t);
 
     if (has_bow != 0) {
-        strncpy((char*)bow, buff+offset, sizeof(uint32_t));
+        memcpy((char*)bow, buff+offset, sizeof(uint32_t));
     }else{
         *bow = 0;
     }
 }
 
 
-uint32_t NgramBuilder_add_word(NgramBuilder builder, char* words, uint32_t prob, uint32_t bow){
+
+typedef struct {
+    uint32_t next_arr_idx;
+    uint32_t wids[MAX_ORDER];
+    uint32_t prob;
+    uint32_t bow;
+    uint32_t order;
+}BuilderGram_T;
+
+static inline void _decode_builder_gram(BuilderGram_T* gram,const char* buff){
+    _decode_gram(gram->wids, &gram->order, &gram->prob, &gram->bow, buff);
+}
+
+void print_ngram(BuilderGram_T *gram);
+void print_ngrams(char** ngram_offsets , size_t num);
+
+
+uint32_t NgramBuilder_add_word(NgramBuilder builder, const char* words, uint32_t prob, uint32_t bow){
     uint32_t wid = HashVocab_add(builder->vocab, words);
     char encode_buff[20];//actually is 13
     uint32_t len = _encode_uni(wid, prob, bow, encode_buff);
@@ -387,30 +452,34 @@ uint32_t NgramBuilder_add_word(NgramBuilder builder, char* words, uint32_t prob,
     builder->ngram_offsets[builder->added_total_gram_num++] = _NgramBuilder_cp_str(builder, encode_buff, len);
     return wid;
 }
-
 //encode ngram to (has_prob:1bit,has_bow:1bit, order:6bit), word_ids(order*4 byte), prob(4byte) bow(4byte)
-int NgramBuilder_add_ngram(NgramBuilder builder, uint32_t* wids, uint32_t order, uint32_t prob, uint32_t bow){
+int NgramBuilder_add_ngram(NgramBuilder builder, const uint32_t* wids, uint32_t order, uint32_t prob, uint32_t bow){
     char encode_buff[1024];//actually is 3 + order*4
     uint32_t len = _encode_gram(wids, order, prob, bow, encode_buff);
+    
     assert(len <= 1024);
     builder->added_gram_nums[order-1]++;
     builder->ngram_offsets[builder->added_total_gram_num++] = _NgramBuilder_cp_str(builder, encode_buff, len);
-    return 0;
+    return 0; 
 }
 
 int ngram_sort_cmp(const void* o1,const void* o2){
-    char* e1 = *((char**) o1);
-    char* e2 = *((char**) o2);
-    uint32_t order1 = (*e1 & ((1<<6)-1));
-    uint32_t order2 = (*e2 & ((1<<6)-1));
+    const char* e1 = *((const char**) o1);
+    const char* e2 = *((const char**) o2);
+    uint32_t order1 = ((*e1) & ((1<<6)-1));
+    uint32_t order2 = ((*e2) & ((1<<6)-1));
+
+    //BuilderGram_T cur_gram;
+    //_decode_builder_gram(&cur_gram, e1);
+    //print_ngram(&cur_gram);
     if (order1 < order2) {
         return -1;
     }
-    if (order2 > order1) {
+    if (order1 > order2) {
         return 1;
     }
-    uint32_t* wids1 = (uint32_t*)(e1+1);
-    uint32_t* wids2 = (uint32_t*)(e2+1);
+    const uint32_t* wids1 = (const uint32_t*)(e1+1);
+    const uint32_t* wids2 = (const uint32_t*)(e2+1);
     for (uint32_t i = 0; i< order1;i++) {
         if (wids1[i] < wids2[i]) {
             return -1;
@@ -419,7 +488,20 @@ int ngram_sort_cmp(const void* o1,const void* o2){
             return 1;
         }
     }
-    assert(0 && "cannot go to here");
+    /*printf("o1_addr:%zu, o2_addr:%zu\n", (size_t)o1, (size_t)o2);
+    printf("e1_addr:%zu, e2_addr:%zu\n", (size_t)e1, (size_t)e2);
+    printf("e1:");
+    for (int i = 0;i<order1;i++) {
+        printf("%d\t", wids1[i]);
+    }
+    printf("\n");
+    printf("e2:");
+    for (int i = 0;i<order2;i++) {
+        printf("%d\t", wids2[i]);
+    }
+    printf("\n");*/
+
+    assert(0 && "cannot go to here"); 
     return 0;
 }
 
@@ -440,18 +522,6 @@ size_t _bsearch_order_start(char** ngram_offsets, size_t len, uint32_t order){
 }
 
 
-
-typedef struct {
-    uint32_t next_arr_idx;
-    uint32_t wids[MAX_ORDER];
-    uint32_t prob;
-    uint32_t bow;
-    uint32_t order;
-}BuilderGram_T;
-
-static inline void _decode_builder_gram(BuilderGram_T* gram,const char* buff){
-    _decode_gram(gram->wids, &gram->order, &gram->prob, &gram->bow, buff);
-}
 /*
 static inline int is_gram_prefix(BuilderGram_T* prefix_gram, BuilderGram_T* gram){
     if (gram->order != prefix_gram->order+1){
@@ -494,10 +564,10 @@ size_t _bsearch_prefix_start(char** ngram_offsets, size_t len, BuilderGram_T* pr
             start = mid + 1;
         }else{
             res = cmp_gram_wids(prefix, &mid_gram, prefix->order);
-            if (res >= 0) {
-                end = mid - 1;
-            }else{
+            if (res > 0) {
                 start = mid + 1;
+            }else{
+                end = mid - 1;
             }
         }
     }
@@ -509,6 +579,7 @@ void serialize_builder_gram(BuilderGram_T* gram, uint32_t model_order,Serializer
         HighGram_T hgram;
         hgram.word = gram->wids[gram->order-1];
         hgram.prob = gram->prob;
+        //printf("highgram, wid:%d, prob:%d\n", hgram.word, hgram.prob);
         serializer((char*)&hgram, sizeof(HighGram_T), param);
         return;
     }
@@ -518,6 +589,7 @@ void serialize_builder_gram(BuilderGram_T* gram, uint32_t model_order,Serializer
         lgram.next_arr_idx = gram->next_arr_idx;
         lgram.prob = gram->prob;
         lgram.bow = gram->bow;
+        //printf("lowgram, order:%d,wid:%d, prob:%d, bow:%d, next_arr_idx:%d\n", gram->order, lgram.word, lgram.prob, lgram.bow, lgram.next_arr_idx);
         serializer((char*)&lgram, sizeof(LowGram_T), param);
         return;
     }
@@ -526,23 +598,29 @@ void serialize_builder_gram(BuilderGram_T* gram, uint32_t model_order,Serializer
         ugram.bow = gram->bow;
         ugram.next_arr_idx = gram->next_arr_idx;
         ugram.prob = gram->prob;
+        //printf("unigram, prob:%d, bow:%d, next_arr_idx:%d\n", ugram.prob, ugram.bow, ugram.next_arr_idx);
         serializer((char*)&ugram, sizeof(UniGram_T), param);
         return;
     }
 }
 
-
 int NgramBuilder_serialize(const NgramBuilder builder, Serializer serializer, void* param){
     for (uint32_t i = 0;i<builder->order;i++) {
         assert(builder->added_gram_nums[i] == builder->gram_nums[i]);
     }
-    qsort(builder->ngram_offsets, builder->added_total_gram_num, sizeof(char*), ngram_sort_cmp);
-    //now sorted by order, wordids
     serializer((char*)&builder->order,sizeof(uint32_t), param);
     for (uint32_t i = 0; i < builder->order;i++) {
         serializer((char*)&builder->gram_nums[i],sizeof(size_t), param);
     }
+    size_t vocab_mem_size = HashVocab_serialize_size(builder->vocab);
+    //printf("serialize vocab_mem_size:%zu\n", vocab_mem_size);
+    serializer((char*)&vocab_mem_size,sizeof(vocab_mem_size), param);
     HashVocab_serialize(builder->vocab, serializer, param);
+
+    qsort(builder->ngram_offsets, builder->added_total_gram_num, sizeof(char*), ngram_sort_cmp);
+    //now sorted by order, wordids
+    //print_ngrams(builder->ngram_offsets, builder->added_total_gram_num);
+
     if (builder->order == 1) {
         BuilderGram_T gram;
         for (uint32_t i = 0;i< builder->gram_nums[0];i++) {
@@ -560,15 +638,23 @@ int NgramBuilder_serialize(const NgramBuilder builder, Serializer serializer, vo
     next_order_offsets[0] = 0;
     for (uint32_t cur_order = 1; cur_order< builder->order;cur_order++) {
         next_order_offsets[cur_order] = _bsearch_order_start(builder->ngram_offsets, builder->added_total_gram_num, cur_order+1);
+        //printf("serialize: next_order_offsets[%d]= %zu\n", cur_order, next_order_offsets[cur_order]);
     }
+
     next_order_offsets[builder->order] = builder->added_total_gram_num;
 
     for (uint32_t cur_order = 1; cur_order < builder->order; cur_order++) {
         BuilderGram_T cur_gram;
         while (cur_offset < next_order_offsets[cur_order]) {
             _decode_builder_gram(&cur_gram, builder->ngram_offsets[cur_offset]);
+            //printf("cur_order:%d\n", cur_order);
+            //printf("cur_gram.order:%d\n", cur_gram.order);
+            assert(cur_gram.order == cur_order);
             cur_gram.next_arr_idx = _bsearch_prefix_start(builder->ngram_offsets, builder->added_total_gram_num, &cur_gram) - next_order_offsets[cur_order];
-            serialize_builder_gram(&cur_gram, builder->order,serializer , param);
+            //if (cur_order == 1) {
+            //    printf("id:%d\t", cur_offset);
+            //}
+            serialize_builder_gram(&cur_gram, builder->order, serializer, param); 
             cur_offset += 1;
         }
         cur_gram.wids[cur_order-1] = -1;
@@ -588,6 +674,7 @@ int NgramBuilder_serialize(const NgramBuilder builder, Serializer serializer, vo
         }
         gram.bow = -1;
         gram.prob = -1;
+        gram.wids[builder->order-1] = -1;
         serialize_builder_gram(&gram, builder->order, serializer, param);//pivot.
     }
     return 0; 
@@ -596,6 +683,7 @@ int NgramBuilder_serialize(const NgramBuilder builder, Serializer serializer, vo
 size_t NgramBuilder_serialize_size(const NgramBuilder builder){
     size_t total_size = sizeof(uint32_t)//order
     + sizeof(size_t)* builder->order//ngram num for every order
+    + sizeof(size_t) //vocab mem size
     + HashVocab_serialize_size(builder->vocab) //vocab
     + sizeof(UniGram_T) * (builder->gram_nums[0]+1); //unigram
     //at the end of gram array, last element is pivot.
@@ -619,3 +707,26 @@ void NgramBuilder_free(NgramBuilder* builder_){
     free(builder);
     *builder_ = NULL;
 }
+
+HashVocab NgramBuilder_vocab(const NgramBuilder builder){
+    return builder->vocab;
+}
+
+void print_ngram(BuilderGram_T *gram){
+    printf("order:%d\t", gram->order);
+    printf("words:");
+    for (int i = 0;i< gram->order;i++) {
+        printf("%d\t", gram->wids[i]);
+    }
+    printf("\n");
+}
+
+void print_ngrams(char** ngram_offsets , size_t num){
+    BuilderGram_T cur_gram;
+    
+    for (size_t i = 0;i<num;i++) {
+        _decode_builder_gram(&cur_gram, ngram_offsets[i]);
+        print_ngram(&cur_gram);
+    }
+}
+

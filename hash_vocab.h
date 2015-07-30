@@ -21,4 +21,6 @@ typedef void (*Serializer)(char* data,size_t len, void* param);
 int HashVocab_serialize(const HashVocab vocab, Serializer serializer,void* param);
 size_t HashVocab_serialize_size(const HashVocab voc);
 
+uint32_t HashVocab_word_num(const HashVocab vocab);
+
 #endif
