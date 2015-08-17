@@ -77,11 +77,11 @@ void ReadUTF8(FILE* fp)
         //order\tword\t...\tprob\tbow
         int order = atoi(strtok(iobuf, "\t"));
         if (order == 1) {
-            //char* word = strtok(NULL,"\t");
-            //uint32_t prob = atoi(strtok(NULL, "\t"));
-            //uint32_t bow = atoi(strtok(NULL, "\t"));
-            //uint32_t word_id = NgramBuilder_add_word(builder,word,prob,bow);
-            //printf("word:%s\tid:%d\n", word, word_id);
+            char* word = strtok(NULL,"\t");
+            uint32_t prob = atoi(strtok(NULL, "\t"));
+            uint32_t bow = atoi(strtok(NULL, "\t"));
+            uint32_t word_id = NgramBuilder_add_word(builder,word,prob,bow);
+            printf("word:%s\tid:%d\n", word, word_id);
         }else{
             uint32_t wids[MAX_ORDER];
             for (int i = 0;i<order;i++) {

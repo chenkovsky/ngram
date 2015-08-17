@@ -443,6 +443,7 @@ void print_ngrams(char** ngram_offsets , size_t num);
 
 
 uint32_t NgramBuilder_add_word(NgramBuilder builder, const char* words, uint32_t prob, uint32_t bow){
+    //printf("%s ,prob:%d, bow:%d\n", words, prob, bow);
     uint32_t wid = HashVocab_add(builder->vocab, words);
     char encode_buff[20];//actually is 13
     uint32_t len = _encode_uni(wid, prob, bow, encode_buff);
@@ -732,6 +733,9 @@ void print_ngrams(char** ngram_offsets , size_t num){
 
 uint32_t NgramBuilder_add_ngram2(NgramBuilder builder, const char** words, uint32_t order, uint32_t prob, uint32_t bow){
     uint32_t wids[MAX_ORDER];
+    //for(int i = 0; i<order;i++){
+    //    printf("%s ,prob:%d, bow:%d\n", words[i], prob, bow);
+    //}
     if (order > 1) {
         for (int i = 0; i < order; i++) {
             wids[i] = HashVocab_id(builder->vocab, words[i]);
