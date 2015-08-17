@@ -30,8 +30,10 @@ NgramBuilder NgramBuilder_init(const size_t* gram_nums, uint32_t order);
 int NgramBuilder_serialize(const NgramBuilder builder, Serializer serializer, void* param);
 void NgramBuilder_free(NgramBuilder* builder_);
 uint32_t NgramBuilder_add_word(NgramBuilder builder, const char* words, uint32_t prob, uint32_t bow);
-int NgramBuilder_add_ngram(NgramBuilder builder, const uint32_t* wids, uint32_t order, uint32_t prob, uint32_t bow);
+uint32_t NgramBuilder_add_ngram(NgramBuilder builder, const uint32_t* wids, uint32_t order, uint32_t prob, uint32_t bow);
+uint32_t NgramBuilder_add_ngram2(NgramBuilder builder, const char** words, uint32_t order, uint32_t prob, uint32_t bow);
 //int NgramBuilder_add_ngram2(NgramBuilder builder, char** wids, uint32_t order, uint32_t prob, uint32_t bow);
 size_t NgramBuilder_serialize_size(const NgramBuilder builder);
 HashVocab NgramBuilder_vocab(const NgramBuilder builder);
+int NgramBuilder_save(NgramBuilder builder, char* path);
 #endif

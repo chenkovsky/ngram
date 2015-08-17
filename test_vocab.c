@@ -25,7 +25,7 @@ HashVocab vocab;
 void ReadUTF8_test(FILE* fp)
 {
     fgets((char*)iobuf, sizeof(iobuf), fp);
-    int word_num = atoi(iobuf);
+    //int word_num = atoi(iobuf);
     HashVocab vocab2 = HashVocab_init_from_bin(rom);
     while( fgets((char*)iobuf, sizeof(iobuf), fp))
     {

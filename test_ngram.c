@@ -47,8 +47,8 @@ void ReadUTF8_test(FILE* fp)
         }
         uint32_t prob = atoi(strtok(NULL, "\t"));
         uint32_t bow = atoi(strtok(NULL, "\t"));
-        assert(Ngram_prob2(ngram,words,order) == prob);
-        assert(Ngram_bow2(ngram, words,order) == bow);
+        assert(Ngram_prob2(ngram,(const char**)words,order) == prob);
+        assert(Ngram_bow2(ngram, (const char**)words,order) == bow);
     }
 }
 
@@ -77,10 +77,10 @@ void ReadUTF8(FILE* fp)
         //order\tword\t...\tprob\tbow
         int order = atoi(strtok(iobuf, "\t"));
         if (order == 1) {
-            char* word = strtok(NULL,"\t");
-            uint32_t prob = atoi(strtok(NULL, "\t"));
-            uint32_t bow = atoi(strtok(NULL, "\t"));
-            uint32_t word_id = NgramBuilder_add_word(builder,word,prob,bow);
+            //char* word = strtok(NULL,"\t");
+            //uint32_t prob = atoi(strtok(NULL, "\t"));
+            //uint32_t bow = atoi(strtok(NULL, "\t"));
+            //uint32_t word_id = NgramBuilder_add_word(builder,word,prob,bow);
             //printf("word:%s\tid:%d\n", word, word_id);
         }else{
             uint32_t wids[MAX_ORDER];

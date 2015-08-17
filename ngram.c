@@ -40,7 +40,6 @@ const char* Ngram_word(const Ngram model, uint32_t word_id){
     return HashVocab_word(model->vocab,word_id);
 }
 
-
 Ngram Ngram_init_from_bin(const char* mem){//assume ending is same
 #define READ(ret, typ, ptr) ret =*(typ *)ptr;\
                             ptr+=sizeof(typ);
@@ -453,7 +452,7 @@ uint32_t NgramBuilder_add_word(NgramBuilder builder, const char* words, uint32_t
     return wid;
 }
 //encode ngram to (has_prob:1bit,has_bow:1bit, order:6bit), word_ids(order*4 byte), prob(4byte) bow(4byte)
-int NgramBuilder_add_ngram(NgramBuilder builder, const uint32_t* wids, uint32_t order, uint32_t prob, uint32_t bow){
+uint32_t NgramBuilder_add_ngram(NgramBuilder builder, const uint32_t* wids, uint32_t order, uint32_t prob, uint32_t bow){
     char encode_buff[1024];//actually is 3 + order*4
     uint32_t len = _encode_gram(wids, order, prob, bow, encode_buff);
     
@@ -730,3 +729,46 @@ void print_ngrams(char** ngram_offsets , size_t num){
     }
 }
 
+
+uint32_t NgramBuilder_add_ngram2(NgramBuilder builder, const char** words, uint32_t order, uint32_t prob, uint32_t bow){
+    uint32_t wids[MAX_ORDER];
+    if (order > 1) {
+        for (int i = 0; i < order; i++) {
+            wids[i] = HashVocab_id(builder->vocab, words[i]);
+        }
+        return NgramBuilder_add_ngram(builder, wids, order, prob, bow);
+    }else{
+        assert(order == 1);
+        return NgramBuilder_add_word(builder,words[0],prob,bow);
+    }
+}
+
+typedef struct{
+    size_t offset;
+    char* ptr;
+}_NgramBuilder_SerializerParam;
+
+void _ngrambuilder_serializer(char* data,size_t len, void* param_){
+    _NgramBuilder_SerializerParam *param = (_NgramBuilder_SerializerParam*) param_;
+    memcpy(param->ptr+param->offset, data, len);
+    param->offset += len;
+}
+
+int NgramBuilder_save(NgramBuilder builder, char* path){
+    size_t size = NgramBuilder_serialize_size(builder);
+    char* rom = malloc(size);
+    _NgramBuilder_SerializerParam param;
+    param.ptr = rom;
+    param.offset = 0;
+    NgramBuilder_serialize(builder, _ngrambuilder_serializer, &param);
+    assert(param.offset == size);
+    FILE *f = fopen(path, "wb");
+    if (f == NULL) {
+        return 1;
+    }
+    fwrite(rom, sizeof(char), size, f); 
+    fclose(f);
+
+    free(rom);
+    return 0;
+}
